@@ -1,0 +1,17 @@
+[Unit]
+Description=USB/SD Card Auto-Mounter
+Documentation=https://github.com/dayvster/capsule
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/capsule
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

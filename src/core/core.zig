@@ -4,3 +4,6 @@ pub const Parser = @import("parser.zig").Parser;
 pub const Listener = @import("listener.zig").Listener;
 pub const Action = @import("action.zig").Action;
 pub const LinuxUtils = @import("utils.zig").LinuxUtils;
+pub const log = @import("log.zig");
+pub const Mounter = @import("mount.zig").Mounter;
+pub const args = @import("args.zig");
