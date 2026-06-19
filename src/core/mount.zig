@@ -7,7 +7,10 @@ const Io = std.Io;
 const NOSUID: u32 = 2;
 const NODEV: u32 = 4;
 const NOEXEC: u32 = 8;
-const MNT_DETACH: u32 = 0x00000001;
+const MNT_DETACH: u32 = 0x00000002;
+const MNT_FORCE: u32 = 0x00000001;
+const UNMOUNT_RETRIES: usize = 3;
+const UNMOUNT_COOLDOWN_NS: u64 = 1_000_000_000;
 const POLL_ATTEMPTS: usize = 20;
 const POLL_INTERVAL_NS: u64 = 100_000_000;
 
@@ -160,6 +163,19 @@ fn sleepNs(ns: u64) void {
     _ = linux.nanosleep(&req, null);
 }
 
+fn unmountWithRetry(p: [:0]const u8) bool {
+    for (0..UNMOUNT_RETRIES) |i| {
+        const rc = linux.errno(linux.umount2(p, MNT_DETACH));
+        log.l2("umount2: {s} → {}\n", .{ p, rc });
+        if (rc == .SUCCESS) return true;
+        if (i < UNMOUNT_RETRIES - 1) sleepNs(UNMOUNT_COOLDOWN_NS);
+    }
+    log.l2("mount: trying force unmount for {s}\n", .{p});
+    const frc = linux.errno(linux.umount2(p, MNT_FORCE));
+    log.l2("umount2(force): {s} → {}\n", .{ p, frc });
+    return frc == .SUCCESS;
+}
+
 fn waitForNode(name: []const u8) bool {
     var buf: [64]u8 = undefined;
     const p = std.fmt.bufPrintZ(&buf, "/dev/{s}", .{name}) catch return false;
@@ -175,7 +191,7 @@ fn waitForNode(name: []const u8) bool {
 fn cleanStaleEntry(name: []const u8) bool {
     var buf: [256]u8 = undefined;
     const p = std.fmt.bufPrintZ(&buf, "/media/{s}", .{name}) catch return false;
-    _ = linux.umount2(p, MNT_DETACH);
+    _ = unmountWithRetry(p);
     const rc = linux.errno(linux.rmdir(p));
     return rc == .SUCCESS or rc == .NOENT;
 }
@@ -289,13 +305,7 @@ fn unmountAndCleanDir(name: []const u8) UnmountOut {
 }
 
 fn doUnmount(p: [:0]const u8) bool {
-    const rc = linux.errno(linux.umount(p));
-    log.l2("umount: {s} → {}\n", .{ p, rc });
-    if (rc == .SUCCESS) return true;
-    log.l2("mount: trying lazy unmount for {s}\n", .{p});
-    const lrc = linux.errno(linux.umount2(p, MNT_DETACH));
-    log.l2("umount2: {s} → {}\n", .{ p, lrc });
-    return lrc == .SUCCESS;
+    return unmountWithRetry(p);
 }
 
 fn reportUnmountResult(m: *Mounter, name: []const u8, label: []const u8, d_rc: UnmountOut, l_rc: UnmountOut) void {

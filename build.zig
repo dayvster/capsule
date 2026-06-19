@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     const core = b.addModule("core", .{
         .root_source_file = b.path("src/core/core.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
     exe.root_module.addImport("core", core);
